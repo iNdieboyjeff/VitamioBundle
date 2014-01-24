@@ -34,6 +34,8 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
+
+import io.vov.vitamio.MediaFormat;
 import io.vov.vitamio.MediaPlayer;
 import io.vov.vitamio.MediaPlayer.OnBufferingUpdateListener;
 import io.vov.vitamio.MediaPlayer.OnCompletionListener;
@@ -44,13 +46,11 @@ import io.vov.vitamio.MediaPlayer.OnSeekCompleteListener;
 import io.vov.vitamio.MediaPlayer.OnTimedTextListener;
 import io.vov.vitamio.MediaPlayer.OnVideoSizeChangedListener;
 import io.vov.vitamio.MediaPlayer.TrackInfo;
-import io.vov.vitamio.Metadata;
 import io.vov.vitamio.R;
 import io.vov.vitamio.Vitamio;
 import io.vov.vitamio.utils.Log;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -96,18 +96,7 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
       mTargetState = STATE_PLAYING;
       
       // Get the capabilities of the player for this stream
-      Metadata data = mp.getMetadata();
-
-      if (data != null) {
-          mCanPause = !data.has(Metadata.PAUSE_AVAILABLE)
-                  || data.getBoolean(Metadata.PAUSE_AVAILABLE);
-          mCanSeekBack = !data.has(Metadata.SEEK_BACKWARD_AVAILABLE)
-                  || data.getBoolean(Metadata.SEEK_BACKWARD_AVAILABLE);
-          mCanSeekForward = !data.has(Metadata.SEEK_FORWARD_AVAILABLE)
-                  || data.getBoolean(Metadata.SEEK_FORWARD_AVAILABLE);
-      } else {
-          mCanPause = mCanSeekBack = mCanSeekForward = true;
-      }
+      //TODO mCanPause
 
       if (mOnPreparedListener != null)
         mOnPreparedListener.onPrepared(mMediaPlayer);
@@ -158,6 +147,8 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
 
     public void surfaceCreated(SurfaceHolder holder) {
       mSurfaceHolder = holder;
+      // Dont forgot this value before Android 2.3
+      mSurfaceHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
       if (mMediaPlayer != null && mCurrentState == STATE_SUSPEND && mTargetState == STATE_RESUME) {
         mMediaPlayer.setDisplay(mSurfaceHolder);
         resume();
@@ -199,11 +190,9 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
   private OnBufferingUpdateListener mOnBufferingUpdateListener;
   private int mCurrentBufferPercentage;
   private long mSeekWhenPrepared; // recording the seek position while preparing
-  private boolean mCanPause;
-  private boolean mCanSeekBack;
-  private boolean mCanSeekForward;
   private Context mContext;
   private Map<String, String> mHeaders;
+  private int mBufSize;
   private OnCompletionListener mCompletionListener = new OnCompletionListener() {
     public void onCompletion(MediaPlayer mp) {
       Log.d("onCompletion");
@@ -369,23 +358,15 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
   public boolean isValid() {
     return (mSurfaceHolder != null && mSurfaceHolder.getSurface().isValid());
   }
-
+ 
   public void setVideoPath(String path) {
     setVideoURI(Uri.parse(path));
   }
-  
-  public void setVideoPath(String path, HashMap<String, String> headers) {
-	    setVideoURI(Uri.parse(path), headers);
-	  }
 
   public void setVideoURI(Uri uri) {
-	  setVideoURI(uri, null);
-  }
-  
-  public void setVideoURI(Uri uri, HashMap<String, String> headers) {
     mUri = uri;
     mSeekWhenPrepared = 0;
-    openVideo(headers);
+    openVideo();
     requestLayout();
     invalidate();
   }
@@ -401,15 +382,8 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
   }
 
   private void openVideo() {
-	  openVideo(null);
-  }
-  
-  private void openVideo(HashMap<String, String> headers) {
     if (mUri == null || mSurfaceHolder == null || !Vitamio.isInitialized(mContext))
       return;
-    
-    if (headers != null)
-    	mHeaders = headers;
 
     Intent i = new Intent("com.android.music.musicservicecommand");
     i.putExtra("command", "pause");
@@ -419,7 +393,7 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
     try {
       mDuration = -1;
       mCurrentBufferPercentage = 0;
-      mMediaPlayer = new MediaPlayer(mContext);
+      mMediaPlayer = new MediaPlayer(mContext, false);
       mMediaPlayer.setOnPreparedListener(mPreparedListener);
       mMediaPlayer.setOnVideoSizeChangedListener(mSizeChangedListener);
       mMediaPlayer.setOnCompletionListener(mCompletionListener);
@@ -430,6 +404,7 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
       mMediaPlayer.setOnTimedTextListener(mTimedTextListener);
       mMediaPlayer.setDataSource(mContext, mUri, mHeaders);
       mMediaPlayer.setDisplay(mSurfaceHolder);
+      mMediaPlayer.setBufferSize(mBufSize);
       mMediaPlayer.setVideoChroma(mVideoChroma == MediaPlayer.VIDEOCHROMA_RGB565 ? MediaPlayer.VIDEOCHROMA_RGB565 : MediaPlayer.VIDEOCHROMA_RGBA);
       mMediaPlayer.setScreenOnWhilePlaying(true);
       mMediaPlayer.prepareAsync();
@@ -682,8 +657,7 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
   }
   
   public void setBufferSize(int bufSize) {
-    if (mMediaPlayer != null)
-      mMediaPlayer.setBufferSize(bufSize);
+  	mBufSize = bufSize;
   }
 
   public boolean isBuffering() {
@@ -703,7 +677,7 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
       mMediaPlayer.setMetaEncoding(encoding);
   }
 
-  public SparseArray<String> getAudioTrackMap(String encoding) {
+  public SparseArray<MediaFormat> getAudioTrackMap(String encoding) {
     if (mMediaPlayer != null)
       return mMediaPlayer.findTrackFromTrackInfo(TrackInfo.MEDIA_TRACK_TYPE_AUDIO, mMediaPlayer.getTrackInfo(encoding));
     return null;
@@ -758,7 +732,7 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
     return -1;
   }
 
-  public SparseArray<String> getSubTrackMap(String encoding) {
+  public SparseArray<MediaFormat> getSubTrackMap(String encoding) {
     if (mMediaPlayer != null)
       return mMediaPlayer.findTrackFromTrackInfo(TrackInfo.MEDIA_TRACK_TYPE_TIMEDTEXT, mMediaPlayer.getTrackInfo(encoding));
     return null;
@@ -766,17 +740,5 @@ public class VideoView extends SurfaceView implements MediaController.MediaPlaye
 
   protected boolean isInPlaybackState() {
     return (mMediaPlayer != null && mCurrentState != STATE_ERROR && mCurrentState != STATE_IDLE && mCurrentState != STATE_PREPARING);
-  }
-
-  public boolean canPause() {
-    return mCanPause;
-  }
-
-  public boolean canSeekBackward() {
-    return mCanSeekBack;
-  }
-
-  public boolean canSeekForward() {
-    return mCanSeekForward;
   }
 }
