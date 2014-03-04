@@ -10,6 +10,7 @@
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
     <application
         android:allowBackup="false"
@@ -45,6 +46,10 @@
             android:label="Media/MediaPlayer" >
         </activity>
         <activity
+            android:name=".MediaPlayerDemo_setSurface"
+            android:label="Media/MediaPlayer" >
+        </activity>
+        <activity
             android:name=".MediaPlayerDemo_Audio"
             android:label="Media/MediaPlayer" >
         </activity>
@@ -71,7 +76,6 @@
         <activity
             android:name=".VideoBuffer"
             android:label="@string/title_activity_video_buffer" >
-
         </activity>
     </application>
 
