@@ -1,6 +1,13 @@
 Change Log
 ==========
 
+version 4.2.2 *(2014-4-4)*
+---------------------------
+
+ * `VideoView` support `AVOptions`.
+ * Improve seek operation.
+ * Fixed `MediaPlayer` release slowly bug.
+
 version 4.2.1 *(2014-2-25)*
 ---------------------------
 
